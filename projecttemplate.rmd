@@ -1,0 +1,710 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+  
+---
+Loan Data from Prosper by Yusuf Britton
+========================================================
+
+```{r global_options, include=TRUE, echo=FALSE}
+#Used to suppress irrelavent warnings
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+
+# Main libs -------------------------
+
+#install.packages('ggplot2')
+library(ggplot2)
+
+#install.packages('dplyr')
+library(dplyr) #Used to chain functions, %>%
+
+#Used to show multi reports with all the variables. Limit to the 15 used.
+#install.packages('GGally')
+library(GGally)
+
+#Used to color different colors in multi reports
+library(RColorBrewer)
+
+
+```
+
+```{r echo=FALSE, Load_the_Data}
+
+# Data Sets -----------------
+
+#read in csv file into dataframe
+fullps <- read.csv('prosperLoanData-.csv')
+
+#Selecting 15 variables for analysis
+myvars <- c("Term", "LoanStatus", "BorrowerAPR", "ProsperRating..Alpha.", 
+            "BorrowerState", "IsBorrowerHomeowner",  
+            "CreditScoreRangeLower", "BankcardUtilization","DebtToIncomeRatio", 
+            "StatedMonthlyIncome", "LoanOriginalAmount","MonthlyLoanPayment")
+
+#subsetting dataframe
+ps <- fullps[myvars]
+
+#Change order of factor variable
+rank = c("", "HR", " E", "D", "C", "B", "A", "AA")
+
+ps$ProsperRating..Alpha. <- ordered(ps$ProsperRating..Alpha., 
+                            levels = rank)
+
+
+# Variables Manipulation
+#New variables created, Annual income
+ps$AnnualIncome = ps$StatedMonthlyIncome * 12
+
+#variables for states choosen for multivariable analysis
+psStates <- subset(ps, subset = 
+               BorrowerState %in% c("CA", "FL", "GA", "IL", "NY", "OH", "TX"))
+
+#Converting Term into a factor
+ps$Term <- factor(ps$Term, levels=c(12,36,60), ordered=TRUE)
+
+```
+
+
+This is a data of over 113,000 borrowers that inquired for loans with Prosper.
+This will look into some variables that may affect borrowers' APR or Prosper
+grade. We will use 12 of the 81 variables in this analysis
+
+# Univariate Plots Section
+
+
+```{r echo=FALSE, Univariate_Plots}
+#See shape of data
+dim(ps)
+
+#See names and types
+#NOTE: interger are whole numbers, while numeric can be whole numbers and 
+#decimals
+str(ps)
+
+#See statisical information
+#NOTE: AmountDelinquent, DebtToIncomeRatio (1 should be highest), 
+#StatedMonthlyIncome, MonthlyLoanPayment has outliers
+summary(ps)
+```
+
+From looking at the statisical data, we have 113,937 observations 
+over 12 variables.
+
+One thing to note is that DebtToIncomeRatio (1 should be highest), 
+StatedMonthlyIncome, and MonthlyLoanPayment have outliers.
+
+
+## Terms
+
+```{r echo=FALSE, Term_Plot}
+ggplot(aes(x = Term), data = ps) + 
+  geom_bar() 
+
+```
+
+From looking at the terms, it seems that 36 month is the most common terms for 
+loans
+
+## LoanStatus
+
+```{r echo=FALSE, LoanStatus}
+ggplot(aes(x = LoanStatus), data = ps) + 
+  geom_histogram(stat = "count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+Most of the loans are still current or completed. There are a some that are
+charged off or defaulted, while a small amount are pasted due or in final 
+payment
+
+
+## BorrowerAPR
+
+```{r echo=FALSE, BorrowerAPR}
+ggplot(aes(x = BorrowerAPR), data = ps) + 
+  geom_histogram(binwidth = .001) + 
+  scale_x_continuous(breaks = seq(.05,.4,.1), limits = c(.05,.4))
+
+summary(ps$BorrowerAPR)
+
+```
+
+It seems that there is a spike APR around 36%. This will be one of the main 
+variables to test what affect this variable. Average APR is about 21%
+
+
+## ProsperRating (Alpha).
+
+```{r echo=FALSE, ProsperRating..Alpha.}
+
+
+ggplot(aes(x = ProsperRating..Alpha.), 
+       data = subset(ps, ProsperRating..Alpha. != "")) + 
+  geom_histogram(stat="count") 
+
+summary(ps$ProsperRating..Alpha.)
+```
+
+There are 29,084 out of the 113,937 that are blank. subsetting dataframe to 
+only exclude blanks.From looking at the data, it seems that AA is the highest 
+and HR is the lowest.
+
+Also, most borrowers have a C rating
+
+## BorrowerState
+
+```{r echo=FALSE, fig.height=20, fig.width=20, BorrowerState}
+ggplot(aes(x = BorrowerState), data = subset(ps, BorrowerState != "")) + 
+  geom_histogram(stat="count") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+There are 5,515 out of the 113,937 that are blank. subsetting dataframe to 
+only exclude blanks.Borrowers are mostly from California. Florida, Illinois, 
+New York, and Texas all follow, being a close second.
+It may be from higher populations from bigger states or more populated cities.
+
+
+
+## IsBorrowerHomeowner
+
+```{r echo=FALSE, IsBorrowerHomeowner}
+ggplot(aes(x = IsBorrowerHomeowner), data = ps) + 
+  geom_histogram(stat="count") 
+
+summary(ps$IsBorrowerHomeowner)
+
+```
+
+There are 57,478 home owners and 56,459 that don't own a home.
+
+
+## CreditScoreRangeLower
+
+```{r echo=FALSE, CreditScoreRangeLower}
+ggplot(aes(x = CreditScoreRangeLower), data = ps) + 
+  geom_histogram(binwidth = 20) +
+  scale_x_continuous(breaks = seq(440,880,40), limits = c(440,880))
+
+summary(ps$CreditScoreRangeLower)
+
+table(ps$CreditScoreRangeLower)
+
+```
+
+For the lower credit score, it seems most borrowers have around 660-700
+
+## BankcardUtilization
+
+```{r echo=FALSE, BankcardUtilization}
+ggplot(aes(x = BankcardUtilization), 
+       data = subset(ps, BankcardUtilization <= 1)) + 
+  geom_histogram(binwidth = .01) +
+  scale_x_continuous(breaks = seq(0,1, .1), limits = c(0,1)) +
+    ylim(0, 2250)
+
+summary(ps$BankcardUtilization)
+
+```
+Per the variable definitions, Bank ultilaztion is a percentage. 
+anything past 1 is an error.
+
+Visually, more than of borrowers have more than 50% utilization
+
+## DebtToIncomeRatio
+
+```{r echo=FALSE, DebtToIncomeRatio}
+ggplot(aes(x = DebtToIncomeRatio), data = subset(ps, DebtToIncomeRatio <= 1)) + 
+  geom_histogram(binwidth = .01) 
+
+summary(ps$DebtToIncomeRatio)
+
+```
+Per the variable definitions, DebtToIncomeRatio is a percentage. anything 
+past 1 is an error.
+
+Moat of the borrowers' debt to income ratio is 25% to 30% 
+
+## Annual Income
+
+```{r echo=FALSE, StatedMonthlyIncome}
+#making annual income section
+ps$AnnualIncome = ps$StatedMonthlyIncome * 12
+
+ggplot(aes(x = StatedMonthlyIncome), data = ps) + 
+  geom_histogram( binwidth = 100) +
+  scale_x_continuous(breaks = seq(0,quantile(ps$StatedMonthlyIncome, .99, 
+                                             na.rm = TRUE), 3000), 
+                     limits = c(0,quantile(ps$StatedMonthlyIncome, .99, 
+                                           na.rm = TRUE))) 
+
+summary(ps$StatedMonthlyIncome)
+
+ggplot(aes(x = AnnualIncome), data = ps) + 
+  geom_histogram( binwidth = 2500) +
+  scale_x_continuous(breaks = seq(0,quantile(ps$AnnualIncome, .99, na.rm = TRUE)
+    ,25000), limits = c(0,quantile(ps$AnnualIncome, .99, na.rm = TRUE))) 
+
+
+summary(ps$AnnualIncome)
+
+
+```
+
+Used 99% quantile to remove outliers.
+
+Most borrowers monthly income is around $4,500 to $5,000, annual income 
+ranging is around 40,000 to 60,000
+
+## LoanOriginalAmount
+
+```{r echo=FALSE, LoanOriginalAmount}
+ggplot(aes(x = LoanOriginalAmount), data = ps) + 
+  geom_histogram( binwidth = 100) +
+  scale_x_continuous(breaks = seq(0,quantile(ps$LoanOriginalAmount, .99, 
+                                             na.rm = TRUE),2000), 
+                     limits = c(0,quantile(ps$LoanOriginalAmount, .99, 
+                                           na.rm = TRUE))) 
+
+summary(ps$LoanOriginalAmount)
+
+```
+
+Used 99% quantile to remove outliers.
+
+Borrower's loan usual borrow around 4,000, 10,000, and 15,000. I wonder if the 
+higher amounts are for homeowners?
+
+## MonthlyLoanPayment
+
+```{r echo=FALSE, MonthlyLoanPayment}
+ggplot(aes(x = MonthlyLoanPayment), data = ps) + 
+  geom_histogram(binwidth = 10) +
+  scale_x_continuous(breaks = seq(0, quantile(ps$MonthlyLoanPayment, 
+                                              .99, na.rm = TRUE),100), 
+                     limits = c(0, quantile(ps$MonthlyLoanPayment, .99, 
+                                            na.rm = TRUE))) 
+
+
+summary(ps$MonthlyLoanPayment)
+
+```
+
+Used 99% quantile to remove outliers.
+
+Most borrowers are paying around $150.00 in their monthly payments
+
+### What is the structure of your dataset?
+There are 113,937 diamonds in the dataset with 12 features (Term, Loan Status, 
+Borrower APR, Prosper Rating, Borrower State, Borrower Homeownership, 
+Credit Score, Bank Utilization, Debt to Income Ratio, Stated monthly income, 
+Loan Original Amount, and Monthly Loan payment).
+
+The variables prosper rating is a ordered factor variable with the 
+following level.
+
+(worst) ------> (best)
+Prosper rating: HR, E, D, C, B, A, AA
+
+
+Other observations:
+
+- Average APR is 21%, with spikes around 36%
+- Most borrowers have a C prosper rating
+- Average credit score is about 685
+- Average bank card utilization is 56%
+- Debt to bank ratio is around 27%
+
+
+### What is/are the main feature(s) of interest in your dataset?
+The main feature in the data set is the Borrower APR and Prosper rating. 
+I would like to determine what features affects the APR. 
+I feel that the prosper grading, as well as other variables, 
+affect borrow rate of interest.
+
+### What other features in the dataset do you think will help support your \
+I think Prosper rating, credit score, Bank Utilization, debt to bank ratio, 
+Annual income, and home ownership may have an effect on the Borrower's APR
+
+### Did you create any new variables from existing variables in the dataset?
+I created the Annual income variable
+
+### Of the features you investigated, were there any unusual distributions? \
+
+I noticed the bank utilization and debt to income ratios have max values higher 
+then 1.
+
+From reading the variable dictionary, These values are ratio from 0 to 1.
+
+I subsetted the file to exclude the outliers
+
+
+# Bivariate Plots Section
+
+```{r echo=FALSE, Prosper_rating_comparisons}
+ggplot(aes(x = ProsperRating..Alpha., y = BorrowerAPR), 
+       data = subset(ps, ProsperRating..Alpha. != "")) + 
+  geom_jitter(alpha = .1) 
+
+ggplot(aes(x = BorrowerState, y = ProsperRating..Alpha.), 
+       data = subset(ps, ProsperRating..Alpha. != "")) + 
+  geom_jitter(alpha = .1) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+From looking at the analysis, borrower's with a higher prosper rating tends 
+to have a lower APR. 
+
+From comparing prosper rating by state, I see concentrations in 
+CA, FL, GA, IL, NY, OH, and TX. I'll look into these variables further
+
+
+```{r echo=FALSE, credit_score_vs_APR}
+ggplot(aes(x = CreditScoreRangeLower, y = BorrowerAPR), 
+       data = subset(ps, CreditScoreRangeLower > 0)) + 
+  geom_jitter(color = "#773F3F", alpha = .1)  +
+  scale_x_continuous(breaks = seq(300,850,100), limits = c(300,850))
+
+
+ggplot(aes(x = BorrowerState, y = CreditScoreRangeLower), 
+       data = subset(ps, BorrowerState != "")) + 
+  geom_jitter(color = "#773F3F", alpha = .1)  +
+  scale_y_continuous(breaks = seq(300,850,100), limits = c(300,850)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+From research, The possible credit score is 300-850. set limits for this range. 
+
+Visually, it seems that having a high credit score somewhat affect APR, but 
+there is a huge APR range concentrate between 640 to 725. 
+
+When comparing to states, the credits have greater rangings in states with
+highly populated cities
+
+There are probably other factors affecting this.
+
+```{r echo=FALSE, Bank_Utilization_vs_APR}
+ggplot(aes(x = BankcardUtilization, y = BorrowerAPR), 
+       data = subset(ps, BankcardUtilization <= 1)) + 
+  geom_jitter(color = "#773F3F", alpha = .05)
+
+
+ggplot(aes(x = BankcardUtilization, y = CreditScoreRangeLower), 
+       data = subset(ps, BankcardUtilization <= 1)) + 
+  geom_jitter(color = "#773F3F", alpha = .05)
+
+```
+
+visually, it doesn't seem like bank utilization has a major affect on APR. 
+One thing to note is that regardless of what utilization is, 
+there is a concentration around 36% APR.
+
+From comparing bank utilization to credit score, it seems that borrowers with 
+lower bank utilization tends to
+have higher credit scores
+
+```{r echo=FALSE, debt_to_bank_ratio_vs_APR}
+ggplot(aes(x = DebtToIncomeRatio, y = BorrowerAPR), 
+       data = subset(ps, DebtToIncomeRatio <= 1)) + 
+  geom_jitter(color = "#773F3F", alpha = .05)
+
+ggplot(aes(x =  IsBorrowerHomeowner, y = DebtToIncomeRatio), 
+       data = subset(ps, DebtToIncomeRatio <= 1)) + 
+  geom_jitter(color = "#773F3F", alpha = .05)
+
+```
+
+visually, it doesn't seem like debt to bank ratio has a major affect on APR. 
+One thing to note is that regardless of what utilization is, there is a 
+concentration around 36% APR
+
+From comparing home ownership to debt to bank, there doesn't seem to be much 
+of a difference 
+
+```{r echo=FALSE, Annual_income_vs_APR}
+ggplot(aes(x = AnnualIncome, y = BorrowerAPR), data = ps) + 
+  geom_jitter(color = "#773F3F", alpha = .5) +
+  scale_x_continuous(breaks = seq(0,quantile(ps$LoanOriginalAmount, .99, 
+                                             na.rm = TRUE),10000), 
+                     limits = c(0,quantile(ps$LoanOriginalAmount, .99, 
+                                           na.rm = TRUE)))
+```
+
+visually, it doesn't seem like debt to bank ratio has a major affect on APR. 
+One thing to note is that regardless of what utilization is, there is a 
+concentration around 36% APR
+
+```{r echo=FALSE, IsBorrowerHomeowner_vs_APR}
+ggplot(aes(x = IsBorrowerHomeowner, y = BorrowerAPR), data = ps) + 
+  geom_jitter(color = "#773F3F", alpha = .01) 
+
+```
+
+visually, it doesn't seem like owning a home has a major affect on APR. 
+One thing to note is that regardless if a borrow owns home, there is a 
+concentration around 36% APR
+
+# Bivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the \
+
+APR correalates to prosper rating and credit score, which looks like it's 
+batching ranging of credit score
+
+### Did you observe any interesting relationships between the other features \
+(not the main feature(s) of interest)?
+What I found interesting was the comparison of states to the prosper data. 
+I will look in how CA, FL, GA, IL, NY, OH, and TX compare to one another in 
+the multivariate analysis
+
+
+
+### What was the strongest relationship you found?
+Between APR and Prosper Grade
+
+# Multivariate Plots Section
+
+```{r echo=FALSE, ProsperRating..Alpha._multivariate}
+
+ggplot(aes(x =  BorrowerState, y = BorrowerAPR, 
+           color = ProsperRating..Alpha.), 
+       data = subset(psStates, ProsperRating..Alpha. != "")) + 
+  geom_point(alpha = 1, size = 1, position = 'jitter') +
+  scale_color_brewer(type = 'div',
+                     guide = guide_legend(title = "Prosper rating", reverse = T,
+                                          override.aes = list(alpha = 1, 
+                                                              size = 2))) +  
+  ggtitle('APR by Prosper score and State')
+
+```
+
+Each state follow the similar breakdowns between APR and prosper rating. CA 
+and TX has higher concentration around have less than 10% APR. In IL, there are 
+some HR rating that were able to get better rates.
+
+
+
+```{r echo=FALSE, CreditScoreRangeLower_multivariate}
+
+ggplot(aes(x = CreditScoreRangeLower, y = BorrowerAPR, 
+           color = ProsperRating..Alpha.), 
+       data = subset(ps, ProsperRating..Alpha. != "")) + 
+  geom_point(alpha = 1, size = 1, position = 'jitter') +
+  scale_color_brewer(type = 'div',
+                     guide = guide_legend(title = "Prosper rating", reverse = T,
+                                          override.aes = list(alpha = 1, 
+                                                              size = 2))) +  
+  ggtitle('APR by credit score and Prosper score')
+
+
+
+```
+
+From looking at the credit scores, there are some HR ratings that got better 
+rate than other. 
+
+Otherwise, the relationship looks like borrowers for better credit scores have 
+better APR and prosper rating.
+
+```{r echo=FALSE, BankcardUtilization_multivariate}
+
+ggplot(aes(x = BankcardUtilization, y = BorrowerAPR, 
+           color = ProsperRating..Alpha.), 
+       data = subset(ps, ProsperRating..Alpha. != "")) + 
+  geom_point(alpha = .5, size = 1, position = 'jitter') +
+  scale_color_brewer(type = 'div',
+                     guide = guide_legend(title = "Prosper rating", reverse = T,
+                                          override.aes = list(alpha = 1, 
+                                                              size = 2))) +  
+  scale_x_continuous(limits = c(0.0, 1), breaks = c(0.25, 0.5, .75, 1)) + 
+  ggtitle('APR by credit card utilization and Prosper score')
+
+
+```
+
+As bank card utilization goes up, you see less AA rating and more HR ratings.
+
+
+```{r echo=FALSE, DebtToIncomeRatio_multivariate}
+
+ggplot(aes(x = DebtToIncomeRatio, y = BorrowerAPR, 
+           color = ProsperRating..Alpha.), 
+       data = subset(ps, ProsperRating..Alpha. != "")) + 
+  geom_point(alpha = .5, size = 1, position = 'jitter') +
+  scale_color_brewer(type = 'div',
+                     guide = guide_legend(title = "Prosper rating", reverse = T,
+                                          override.aes = list(alpha = 1, 
+                                                              size = 2))) +  
+  scale_x_continuous(limits = c(0.0, 1), breaks = c(0.25, 0.5, .75, 1)) + 
+  ggtitle('APR by debt to income ratio and Prosper score')
+
+
+
+```
+
+For the rating, most AA are in the 0 to 40 percent range. HR is almost as high 
+as 100%. All the other ratings are around 60%
+
+```{r echo=FALSE, AnnualIncome_multivariate}
+
+ggplot(aes(x = AnnualIncome, y = BorrowerAPR, color = ProsperRating..Alpha.), 
+       data = subset(ps, ProsperRating..Alpha. != "")) + 
+  geom_point(alpha = .05, size = 2, position = 'jitter') +
+  scale_color_brewer(type = 'div',
+                     guide = guide_legend(title = "Prosper rating", 
+                                          reverse = T,
+                                          override.aes = list(alpha = 1, 
+                                                              size = 2))) +  
+  scale_x_continuous(limits = c(0,quantile(ps$AnnualIncome, .99, na.rm = TRUE)), 
+                     breaks = seq(0,quantile(ps$AnnualIncome, .99, 
+                                             na.rm = TRUE),50000)) + 
+  ggtitle('APR by Annual Income and Prosper score')
+
+```
+
+
+```{r echo=FALSE, IsBorrowerHomeowner_multivariate}
+
+ggplot(aes(x = IsBorrowerHomeowner, y = BorrowerAPR, 
+           color = ProsperRating..Alpha.), 
+       data = subset(ps, ProsperRating..Alpha. != "")) + 
+  geom_point(alpha = .05, size = 1, position = 'jitter') +
+  scale_color_brewer(type = 'div',
+                     guide = guide_legend(title = "Prosper rating", reverse = T,
+                                          override.aes = list(alpha = 1, 
+                                                              size = 2))) +  
+  ggtitle('APR by Annual Income and Prosper score')
+
+```
+
+Interestly, there are more homeowners that have AA ratings.
+
+# Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the \
+
+From comparing variables to Prosper rating and APR, each variable followed a 
+pretty similar relationship from what was explored in the bivariate plots
+
+### Were there any interesting or surprising interactions between features?
+
+I found it surprising the homeowners had higher prosper ratings than 
+non-homeowners
+
+
+------
+
+# Final Plots and Summary
+
+### Plot One
+```{r echo=FALSE, Plot_One, include=TRUE}
+ggplot(aes(x = BorrowerState, y = ProsperRating..Alpha.), 
+       data = subset(ps, ProsperRating..Alpha. != "")) + 
+  geom_jitter(alpha = .1) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle('Borrower state vs Prosper Rating')
+
+psStates %>%
+  group_by(BorrowerState) %>%
+  summarise (n = n()) %>%
+  mutate(freq = n / sum(n)) %>%
+  arrange(desc(freq))
+
+ps %>%
+  group_by(BorrowerState) %>%
+  summarise (n = n()) %>%
+  mutate(freq = n / sum(n)) %>%
+  filter(BorrowerState %in% c("CA", "FL", "GA", "IL", "NY", "OH", "TX")) %>%
+  arrange(desc(freq))
+
+```
+
+
+### Description One
+What I found interesting about this is the intensity of ratings in different 
+states.
+it could be that the states with the higher concentration were because 
+some they contain some of America's biggest cities.
+
+In this set, CA makes up 29% of the 6 states chosen in the analysis and 13% of 
+the population
+
+### Plot Two
+```{r echo=FALSE, Plot_Two, include=TRUE}
+ggplot(aes(x = CreditScoreRangeLower, y = BorrowerAPR), 
+       data = subset(ps, CreditScoreRangeLower > 0)) + 
+  geom_jitter(color = "#773F3F", alpha = .1)  +
+  scale_x_continuous(breaks = seq(300,850,100), limits = c(300,850)) +  
+  ggtitle('Credit score vs APR')
+
+
+summary(ps$CreditScoreRangeLower)
+```
+
+### Description Two
+Though some of the borrowers had perfect credit scores, they still had a 
+high APR interest rating.
+
+Most of the borrowers credit scores ranged from 660 to 720.
+
+### Plot Three
+```{r echo=FALSE, Plot_Three, include=TRUE}
+ggplot(aes(x = IsBorrowerHomeowner, y = BorrowerAPR, 
+           color = ProsperRating..Alpha.), 
+       data = subset(ps, ProsperRating..Alpha. != "")) + 
+  geom_point(alpha = .05, size = 1, position = 'jitter') +
+  scale_color_brewer(type = 'div',
+                     guide = guide_legend(title = "Prosper rating", 
+                                          reverse = T,
+                                          override.aes = list(alpha = 1, 
+                                                              size = 2))) +  
+  ggtitle('APR by Annual Income and Prosper score')
+
+ps %>%
+  group_by(IsBorrowerHomeowner, ProsperRating..Alpha.) %>%
+  summarise (n = n()) %>%
+  mutate(Percentage = n / sum(n)) %>%
+  filter(ProsperRating..Alpha. == "AA") %>%
+  arrange(desc(Percentage))
+```
+
+
+
+### Description Three
+Home owners generally had more AA ratings. It could be that homeownership plays
+a big part on getting a better rating.
+
+There are 3,847 homeowners in the AA rating, and 1,525 non-homeowners in this
+rating
+
+
+------
+
+# Reflection
+
+
+From doing the analysis, I was able to find that APR follow pretty closely with 
+the prosper rating.Some of the struggle I had was trying to find the 
+relationship, only to realize that some of the information isn't complete. 
+For example, I would have loved to look at rating by occupation, but quickly 
+saw that the "Professional" value made up most of the variable. I found that 
+there was alot of missing information.
+
+I was surprised about the impact homeownership have on securing a AA rating 
+and having a decent APR.
+
+I would like to look back at this data set by acquiring a more complete data 
+set that would show a better breakdown of occupation to do a further analysis,
+as well as retrieving city data in states that has the highest borrowers
+
+
